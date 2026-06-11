@@ -7,8 +7,13 @@ on:
       - main
       - 'feature/*'
 
-env:
-    MONGO_URI: "mongodb+srv://${{ vars.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@supercluster.d83jj.mongodb.net/superData?retryWrites=true&w=majority"
+  env:
+       # Pass the separate variables your code is looking for
+        MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+        MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+        # Keep this here just in case
+        MONGO_URI: "mongodb+srv://${{ vars.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@supercluster.d83jj.mongodb.net/superData?retryWrites=true&w=majority"
+      run: npm test
 
 
     
