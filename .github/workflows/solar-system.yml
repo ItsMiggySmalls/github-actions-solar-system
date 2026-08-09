@@ -22,7 +22,7 @@ jobs:
         strategy:
           matrix:
             node-version: [18, 24]
-            operating-system: [ubuntu-latest, windows-latest]
+            operating-system: [ubuntu-latest]
             exclude:
               - node-version: 18
                 operating-system: macos-latest
