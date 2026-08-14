@@ -133,16 +133,16 @@ jobs:
             wget -q -O - 127.0.0.1:3000/live | grep live
 
 
-            - name: Set lower case repository name
-              run: |
+        - name: Set lower case repository name
+          run: |
                 echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
-            - name: Container registry push
-              uses: docker/build-push-action@v7
-              with:
-                context: .
-                push: true
-                tags: |
-                  itsmiggysmalls/solar-system:${{ github.sha }}
-                  ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+        - name: Container registry push
+          uses: docker/build-push-action@v7
+          with:
+            context: .
+            push: true
+            tags: |
+              itsmiggysmalls/solar-system:${{ github.sha }}
+              ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
 
