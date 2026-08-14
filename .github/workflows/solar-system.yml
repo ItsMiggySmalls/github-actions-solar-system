@@ -135,7 +135,7 @@ jobs:
 
         - name: Set lower case repository name
           run: |
-            echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENVIRONMENT
+            echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
 
         - name: Container registry push
