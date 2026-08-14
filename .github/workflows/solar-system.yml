@@ -137,13 +137,12 @@ jobs:
           run: |
             echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
-
         - name: Container registry push
           uses: docker/build-push-action@v7
           with:
             context: .
             push: true
             tags: |
-              ***/solar-system:${{ github.sha }}
+              ${{ secrets.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
               ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
 
