@@ -7,6 +7,10 @@ on:
       - main
       - 'feature/*'
 
+permissions:
+  contents: read
+  packages: write
+
 env:
        # Pass the separate variables your code is looking for
    MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
