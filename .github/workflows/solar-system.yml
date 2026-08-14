@@ -133,6 +133,11 @@ jobs:
             wget -q -O - 127.0.0.1:3000/live | grep live
 
 
+        - name: Set lower case repository name
+          run: |
+            echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENVIRONMENT
+
+
         - name: Container registry push
           uses: docker/build-push-action@v7
           with:
