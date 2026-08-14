@@ -103,7 +103,7 @@ jobs:
             username: ${{ secrets.DOCKER_USERNAME }}
             password: ${{ secrets.DOCKER_PASSWORD }}
 
-        - name: Docker Build Fr Testing
+        - name: Docker Build For Testing
           uses: docker/build-push-action@v7
           with:
             context: .
@@ -124,3 +124,12 @@ jobs:
 
             echo Testing Image URL using wget
             wget -q -O - 127.0.0.1:3000/live | grep live
+
+
+        - name: Docker Push to Dockerhub
+          uses: docker/build-push-action@v7
+          with:
+            context: .
+            push: true
+            tags: ${{ secrets.DOCKER_USERNAME }}/solar-system:${{ github.sha }}
+
