@@ -170,3 +170,20 @@ jobs:
               itsmiggysmalls/solar-system:${{ github.sha }}
               ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
 
+    dev-deploy:
+      needs: docker
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout Repo
+          uses: actions/checkout@v4
+
+        - name: Install cubectl
+          uses: azure/setup-kubectl@v3
+          with:
+            version: 'latest'
+            
+        - name: Fetch Kubernetes Cluster Details
+          run: |
+            Kubectl version --short
+            echo ----------------------------------------
+            kubectl get nodes
