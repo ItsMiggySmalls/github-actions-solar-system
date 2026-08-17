@@ -187,3 +187,4 @@ jobs:
             Kubectl version --short
             echo ----------------------------------------
             kubectl get nodes
+            
