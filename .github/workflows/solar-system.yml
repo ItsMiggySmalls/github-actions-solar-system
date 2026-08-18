@@ -177,10 +177,10 @@ jobs:
         - name: Checkout Repo
           uses: actions/checkout@v4
 
-        - name: Install kubectl
+        - name: Install kubectl CLI
           uses: azure/setup-kubectl@v3
           with:
-            version: 'latest'
+            version: 'v1.26.0'
 
         - name: set Kubeconfig file
           uses: azure/k8s-set-context@v3
