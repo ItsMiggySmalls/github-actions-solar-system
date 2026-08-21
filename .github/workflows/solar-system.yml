@@ -160,25 +160,22 @@ jobs:
             ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
 
  dev-deploy:
+    needs: docker
     runs-on: ubuntu-latest
-    environment: development  # Add if KUBECONFIG is an environment secret
-
     steps:
-      - name: Set up Kubectl
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Install kubectl CLI
         uses: azure/setup-kubectl@v3
         with:
-          version: 'v1.28.0'
+          version: '1.26.0'
 
-      - name: Set Kubernetes Context
-        uses: azure/k8s-set-context@v3
-        with:
-          method: kubeconfig
-          kubeconfig: ${{ secrets.KUBECONFIG }}
-
-      - name: Fetch Cluster Info & Nodes
+      - name: Fetch Kubernetes Cluster Details
         run: |
-          kubectl cluster-info
-          kubectl get nodes -o wide
+          kubectl version --short
+          echo "------------------------------------------"
+          kubectl get nodes
 
 
       # - name: Install Kubernetes Cluster
