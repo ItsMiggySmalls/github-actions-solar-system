@@ -183,8 +183,10 @@ jobs:
       - name: Save Nginx Ingress IP
         id: ingress
         run: |
-          echo "INGRESS_IP=$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
-            -o jsonpath='{.status.loadBalancer.ingress[0].ip}')" >> $GITHUB_ENV
+          INGRESS_IP=$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
+            -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+          INGRESS_IP=${INGRESS_IP:-127.0.0.1}
+          echo "INGRESS_IP=$INGRESS_IP" >> "$GITHUB_ENV"
       
 
       - name: Deploy to Dev
