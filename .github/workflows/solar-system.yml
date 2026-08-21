@@ -244,3 +244,11 @@ jobs:
           kubectl -n default get svc
           echo "------------------------------------------"
           kubectl -n default get deployment
+
+      - name: Test Dev Ingress
+        run: |
+          kubectl -n development rollout status deployment/solar-system --timeout=120s
+          HOST=$(kubectl -n development get ingress solar-system \
+            -o jsonpath='{.spec.rules[0].host}')
+          echo "Testing http://$HOST"
+          curl --fail --resolve "$HOST:80:127.0.0.1" "http://$HOST/"
