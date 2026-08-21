@@ -159,7 +159,7 @@ jobs:
             itsmiggysmalls/solar-system:${{ github.sha }}
             ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
 
- dev-deploy:
+  dev-deploy:
     needs: docker
     runs-on: ubuntu-latest
     steps:
