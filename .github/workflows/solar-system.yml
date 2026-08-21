@@ -160,15 +160,10 @@ jobs:
             ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
 
  dev-deploy:
-    name: Deploy to Dev
-    needs: unit-testing
     runs-on: ubuntu-latest
-    environment: development
+    environment: development  # Add if KUBECONFIG is an environment secret
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
       - name: Set up Kubectl
         uses: azure/setup-kubectl@v3
         with:
