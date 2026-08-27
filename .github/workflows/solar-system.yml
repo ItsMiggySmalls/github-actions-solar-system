@@ -255,7 +255,7 @@ jobs:
 
 
     prod-deploy:
-      name: Deply to production
+      name: Deploy to production
       if: github.ref == 'refs/heads/main'
       runs-on: ubuntu-latest
       needs: docker
@@ -336,6 +336,6 @@ jobs:
         name: production
       runs-on: ubuntu-latest
       steps:
-        - name: Echo Target URL from Dev-Deploy
+        - name: Echo Target URL from Prod-Deploy
           run: |
             echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.app-ingress-url }}"
