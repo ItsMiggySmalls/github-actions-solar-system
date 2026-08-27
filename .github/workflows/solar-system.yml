@@ -305,7 +305,7 @@ jobs:
 
         - name: Deploy to KinD
           run: |
-            kubectl apply -n development -f kubernetes/production/
+            kubectl apply -n production -f kubernetes/production/
             kubectl -n production rollout status deployment/solar-system --timeout=120s
 
         - name: Set Ingress Host Output
