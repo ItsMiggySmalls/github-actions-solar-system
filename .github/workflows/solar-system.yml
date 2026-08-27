@@ -230,8 +230,9 @@ jobs:
 
         - name: In-Cluster Integration Test
           run: |
-            HOST=$(kubectl -n development get ingress solar-system -o jsonpath='{.spec.rules[0].host}')
-            curl --fail --resolve "$HOST:80:127.0.0.1" "http://$HOST/live"
+            kubectl -n development port-forward svc/solar-system 3000:3000 &
+            sleep 3
+            curl --fail http://127.0.0.1:3000/live
 
         - name: Check Pod and Deployment Status on Failure
           if: always()
