@@ -194,23 +194,26 @@ jobs:
                 --docker-username=${{ github.actor }} \
                 --docker-password=${{ secrets.GITHUB_TOKEN }}
 
-          - name: Deploy Application
-            run: |
-              # If using manifests:
-              # sed -i "s|IMAGE_PLACEHOLDER|ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}|g" kubernetes/development/*.yaml
-              # kubectl apply -n development -f kubernetes/development/
+          - name: Replace Tokens & Apply Manifests
+            uses: cschleiden/replace-tokens@v1
+            with:
+              tokenPrefix: '{_'
+              tokenSuffix: '_}'
+              files: kubernetes/development/*.yaml
+            env:
+              NAMESPACE: development
+              REPLICAS: "2"
+              IMAGE: ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+              INGRESS_IP: 127.0.0.1
 
-              # Or running directly:
-              kubectl -n development run solar-system \
-                --image=ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }} \
-                --overrides='{ "spec": { "imagePullSecrets": [{"name": "ghcr-secret"}] } }' \
-                --env="MONGO_URI=${{ env.MONGO_URI }}" \
-                --env="MONGO_USERNAME=${{ env.MONGO_USERNAME }}" \
-                --env="MONGO_PASSWORD=${{ env.MONGO_PASSWORD }}"
+          - name: Deploy to KinD
+            run: |
+              kubectl apply -n development -f kubernetes/development/
+              kubectl -n development rollout status deployment/solar-system --timeout=120s
 
           - name: Check Status & Debug on Failure
             if: always()
             run: |
               kubectl -n development get pods -o wide
               kubectl -n development describe pods
-              kubectl -n development logs -l run=solar-system --tail=50 || true
+              kubectl -n development logs -l app=solar-system --tail=50 || true
