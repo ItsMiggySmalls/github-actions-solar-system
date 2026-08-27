@@ -210,6 +210,10 @@ jobs:
             IMAGE: ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
             INGRESS_IP: 127.0.0.1
 
+        - name: Verify updated manifests
+          run: |
+            cat kubernetes/development/*.yaml
+
         - name: Deploy to KinD
           run: |
             kubectl apply -n development -f kubernetes/development/
