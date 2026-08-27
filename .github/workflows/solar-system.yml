@@ -245,7 +245,7 @@ jobs:
 
     dev-integration-testing:
       if: contains(github.ref, 'feature/')
-      name: Integration Testing
+      name: Dev-Integration Testing
       needs: dev-deploy
       runs-on: ubuntu-latest
       steps:
@@ -255,6 +255,7 @@ jobs:
 
 
     prod-deploy:
+      name: Deploy to production
       if: github.ref == 'refs/heads/main'
       runs-on: ubuntu-latest
       needs: docker
@@ -293,39 +294,39 @@ jobs:
             tokenSuffix: '_}'
             files: kubernetes/production/*.yaml
           env:
-            NAMESPACE: development
-            REPLICAS: "2"
+            NAMESPACE: production
+            REPLICAS: "3"
             IMAGE: ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
             INGRESS_IP: 127.0.0.1
 
         - name: Verify updated manifests
           run: |
-            cat kubernetes/development/*.yaml
+            cat kubernetes/production/*.yaml
 
         - name: Deploy to KinD
           run: |
-            kubectl apply -n development -f kubernetes/development/
-            kubectl -n development rollout status deployment/solar-system --timeout=120s
+            kubectl apply -n production -f kubernetes/production/
+            kubectl -n production rollout status deployment/solar-system --timeout=120s
 
         - name: Set Ingress Host Output
           id: set-ingress-host
           run: |
-            HOST=$(kubectl -n development get ingress solar-system -o jsonpath='{.spec.rules[0].host}')
+            HOST=$(kubectl -n production get ingress solar-system -o jsonpath='{.spec.rules[0].host}')
             echo "Found Ingress Host: $HOST"
             echo "APP_INGRESS_URL=$HOST" >> "$GITHUB_OUTPUT"
 
         - name: In-Cluster Integration Test
           run: |
-            kubectl -n development port-forward svc/solar-system 3000:3000 &
+            kubectl -n production port-forward svc/solar-system 3000:3000 &
             sleep 3
             curl --fail http://127.0.0.1:3000/live
 
         - name: Check Pod and Deployment Status on Failure
           if: always()
           run: |
-            kubectl -n development get pods -o wide
-            kubectl -n development describe pods -l app=solar-system
-            kubectl -n development logs -l app=solar-system --all-containers=true --tail=50 || true
+            kubectl -n production get pods -o wide
+            kubectl -n production describe pods -l app=solar-system
+            kubectl -n production logs -l app=solar-system --all-containers=true --tail=50 || true
 
     prod-integration-testing:
       name: Prod Integration Testing
@@ -335,6 +336,6 @@ jobs:
         name: production
       runs-on: ubuntu-latest
       steps:
-        - name: Echo Target URL from Dev-Deploy
+        - name: Echo Target URL from Prod-Deploy
           run: |
             echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.app-ingress-url }}"
