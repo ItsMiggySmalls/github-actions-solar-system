@@ -1,10 +1,12 @@
 name: Deployment - Reusable Workflow
 
-on: Workflow_call
+on: 
+  workflow_call
 
 
 jobs:
     reuse-deploy:
+        runs-on: ubuntu-latest
         environment:
             name: development
             url: https://${{ steps.set-ingress-host.outputs.APP_INGRESS_URL }}
