@@ -1,5 +1,13 @@
-#resuable workflow called
-- name: Set lower case repository name
+name: Reusable Deployment
+
+on:
+  workflow_call:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set lower case repository name
         run: |
           echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
@@ -58,5 +66,3 @@
           kubectl -n development get pods -o wide
           kubectl -n development describe pods -l app=solar-system
           kubectl -n development logs -l app=solar-system --all-containers=true --tail=50 || true
-
-        
