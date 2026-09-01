@@ -1,0 +1,63 @@
+name: Reusable Deployment Workflow
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      namespace:
+        required: true
+        type: string
+      image:
+        required: true
+        type: string
+      ingress_ip:
+        required: false
+        type: string
+        default: 127.0.0.1
+    secrets:
+      MONGO_URI:
+        required: true
+      MONGO_PASSWORD:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install kubectl CLI
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.26.0'
+
+      - name: Install local Kubernetes cluster
+        uses: helm/kind-action@v1
+
+      - name: Verify cluster access
+        run: |
+          kubectl version --client
+          kubectl get nodes
+
+      - name: Deploy app to namespace
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          NAMESPACE: ${{ inputs.namespace }}
+          IMAGE: ${{ inputs.image }}
+          INGRESS_IP: ${{ inputs.ingress_ip }}
+        run: |
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" create secret generic mongo-db-creds \
+            --from-literal="MONGO_URI=${MONGO_URI}" \
+            --from-literal="MONGO_USERNAME=${MONGO_USERNAME}" \
+            --from-literal="MONGO_PASSWORD=${MONGO_PASSWORD}" \
+            --save-config --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f kubernetes/${{ inputs.environment }}/
+          kubectl -n "$NAMESPACE" get pods
