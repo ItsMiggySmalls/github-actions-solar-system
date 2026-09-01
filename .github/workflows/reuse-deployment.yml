@@ -1,77 +1,59 @@
-name: Deployment - Reusable Workflow
+- name: Set lower case repository name
+        run: |
+          echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
-on: 
-  workflow_call
+      - name: Install Kubernetes Cluster
+        uses: helm/kind-action@v1
 
+      - name: Create Namespace & Secrets
+        run: |
+          kubectl create namespace development || true
+          kubectl -n development create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }}
+          kubectl -n development create secret generic mongo-db-creds \
+            --from-literal=MONGO_URI='${{ env.MONGO_URI }}' \
+            --from-literal=MONGO_USERNAME='${{ env.MONGO_USERNAME }}' \
+            --from-literal=MONGO_PASSWORD='${{ env.MONGO_PASSWORD }}'
 
-jobs:
-    reuse-deploy:
-        runs-on: ubuntu-latest
-        environment:
-            name: development
-            url: https://${{ steps.set-ingress-host.outputs.APP_INGRESS_URL }}
-        outputs:
-            app-ingress-url: ${{ steps.set-ingress-host.outputs.APP_INGRESS_URL }}
-        steps:
-            - name: Checkout Repo
-            uses: actions/checkout@v4
+      - name: Replace Tokens in Manifests
+        uses: cschleiden/replace-tokens@v1
+        with:
+          tokenPrefix: '{_'
+          tokenSuffix: '_}'
+          files: kubernetes/development/*.yaml
+        env:
+          NAMESPACE: development
+          REPLICAS: "2"
+          IMAGE: ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+          INGRESS_IP: 127.0.0.1
 
-            - name: Set lower case repository name
-            run: |
-                echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+      - name: Verify updated manifests
+        run: |
+          cat kubernetes/development/*.yaml
 
-            - name: Install Kubernetes Cluster
-            uses: helm/kind-action@v1
+      - name: Deploy to KinD
+        run: |
+          kubectl apply -n development -f kubernetes/development/
+          kubectl -n development rollout status deployment/solar-system --timeout=120s
 
-            - name: Create Namespace & Secrets
-            run: |
-                kubectl create namespace development || true
-                kubectl -n development create secret docker-registry ghcr-secret \
-                --docker-server=ghcr.io \
-                --docker-username=${{ github.actor }} \
-                --docker-password=${{ secrets.GITHUB_TOKEN }}
-                kubectl -n development create secret generic mongo-db-creds \
-                --from-literal=MONGO_URI='${{ env.MONGO_URI }}' \
-                --from-literal=MONGO_USERNAME='${{ env.MONGO_USERNAME }}' \
-                --from-literal=MONGO_PASSWORD='${{ env.MONGO_PASSWORD }}'
+      - name: Set Ingress Host Output
+        id: set-ingress-host
+        run: |
+          HOST=$(kubectl -n development get ingress solar-system -o jsonpath='{.spec.rules[0].host}')
+          echo "Found Ingress Host: $HOST"
+          echo "APP_INGRESS_URL=$HOST" >> "$GITHUB_OUTPUT"
 
-            - name: Replace Tokens in Manifests
-            uses: cschleiden/replace-tokens@v1
-            with:
-                tokenPrefix: '{_'
-                tokenSuffix: '_}'
-                files: kubernetes/development/*.yaml
-            env:
-                NAMESPACE: development
-                REPLICAS: "2"
-                IMAGE: ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
-                INGRESS_IP: 127.0.0.1
+      - name: In-Cluster Integration Test
+        run: |
+          kubectl -n development port-forward svc/solar-system 3000:3000 &
+          sleep 3
+          curl --fail http://127.0.0.1:3000/live
 
-            - name: Verify updated manifests
-            run: |
-                cat kubernetes/development/*.yaml
-
-            - name: Deploy to KinD
-            run: |
-                kubectl apply -n development -f kubernetes/development/
-                kubectl -n development rollout status deployment/solar-system --timeout=120s
-
-            - name: Set Ingress Host Output
-            id: set-ingress-host
-            run: |
-                HOST=$(kubectl -n development get ingress solar-system -o jsonpath='{.spec.rules[0].host}')
-                echo "Found Ingress Host: $HOST"
-                echo "APP_INGRESS_URL=$HOST" >> "$GITHUB_OUTPUT"
-
-            - name: In-Cluster Integration Test
-            run: |
-                kubectl -n development port-forward svc/solar-system 3000:3000 &
-                sleep 3
-                curl --fail http://127.0.0.1:3000/live
-
-            - name: Check Pod and Deployment Status on Failure
-            if: always()
-            run: |
-                kubectl -n development get pods -o wide
-                kubectl -n development describe pods -l app=solar-system
-                kubectl -n development logs -l app=solar-system --all-containers=true --tail=50 || true
+      - name: Check Pod and Deployment Status on Failure
+        if: always()
+        run: |
+          kubectl -n development get pods -o wide
+          kubectl -n development describe pods -l app=solar-system
+          kubectl -n development logs -l app=solar-system --all-containers=true --tail=50 || true
