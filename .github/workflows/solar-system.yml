@@ -172,7 +172,6 @@ jobs:
 
     dev-deploy:
       if: contains(github.ref, 'feature/')
-      runs-on: ubuntu-latest
       needs: docker
       uses: ./.github/workflows/reuse-deployment.yml
 
@@ -190,7 +189,6 @@ jobs:
     prod-deploy:
       name: Deploy to production
       if: github.ref == 'refs/heads/main'
-      runs-on: ubuntu-latest
       needs: docker
       uses: ./.github/workflows/reuse-deployment.yml
 
