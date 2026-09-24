@@ -199,8 +199,8 @@ jobs:
       uses: ./.github/workflows/reuse-deployment.yml
       with:
         mongodb-uri: ${{ vars.MONGO_URI }}
-        environment: development
-        k8s-manifest-dir: kubernetes/development/
+        environment: production
+        k8s-manifest-dir: kubernetes/production/
       secrets:
         mongodb-password: ${{ secrets.MONGO_PASSWORD }}
 
