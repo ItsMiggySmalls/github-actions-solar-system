@@ -187,9 +187,13 @@ jobs:
       needs: dev-deploy
       runs-on: ubuntu-latest
       steps:
-        - name: Echo Target URL from Dev-Deploy
+        - name: Test URL Output using CURL and JQ
+          env:
+            URL: ${{ needs.dev-deploy.outputs.application-url }}
           run: |
-            echo "Testing deployed application endpoint: ${{ needs.dev-deploy.outputs.app-ingress-url }}"
+            echo $URL
+            echo "------------------------------"
+            curl https::/$URL/live -s -k | jq -r .status | gre -i live
 
 
     prod-deploy:
@@ -212,7 +216,12 @@ jobs:
         name: production
       runs-on: ubuntu-latest
       steps:
-        - name: Echo Target URL from Prod-Deploy
+        - name: Test URL Output using CURL and JQ
+          env:
+            URL: ${{ needs.dev-deploy.outputs.application-url }}
           run: |
-            echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.app-ingress-url }}
+            echo $URL
+            echo "------------------------------"
+            curl https::/$URL/live -s -k | jq -r .status | gre -i live
+            #echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.app-ingress-url }}
             
