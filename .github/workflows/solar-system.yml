@@ -214,4 +214,5 @@ jobs:
       steps:
         - name: Echo Target URL from Prod-Deploy
           run: |
-            echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.app-ingress-url }}"
+            echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.app-ingress-url }}
+            
