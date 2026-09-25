@@ -28,11 +28,13 @@ on:
       mongodb-password:
         required: true
     outputs:
-        application-url:
-          value: ${{ jobs.reuse-deploy.outputs.APP_INGRESS_URL }}
+      application-url:
+        value: ${{ jobs.reuse-deploy.outputs.application-url }}
 
 jobs:
   reuse-deploy:
+    outputs:
+      application-url: ${{ steps.get-ingress.outputs.application-url }}
     environment:
       name: ${{ inputs.environment }}
     runs-on: ubuntu-latest
@@ -71,3 +73,9 @@ jobs:
 
       - name: Deploy to Target Environment
         run: kubectl apply -f "${{ inputs.k8s-manifest-dir }}"
+
+      - name: Capture Ingress URL
+        id: get-ingress
+        run: |
+          HOST=$(kubectl get ingress solar-system -n "${{ inputs.environment }}" -o jsonpath='{.spec.rules[0].host}')
+          echo "application-url=https://${HOST}" >> "$GITHUB_OUTPUT"

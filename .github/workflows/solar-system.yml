@@ -191,9 +191,9 @@ jobs:
           env:
             URL: ${{ needs.dev-deploy.outputs.application-url }}
           run: |
-            echo $URL
+            echo "$URL"
             echo "------------------------------"
-            curl https::/$URL/live -s -k | jq -r .status | grep -i live
+            curl "${URL}/live" -s -k | jq -r .status | grep -i live
 
 
     prod-deploy:
@@ -218,10 +218,10 @@ jobs:
       steps:
         - name: Test URL Output using CURL and JQ
           env:
-            URL: ${{ needs.dev-deploy.outputs.application-url }}
+            URL: ${{ needs.prod-deploy.outputs.application-url }}
           run: |
-            echo $URL
+            echo "$URL"
             echo "------------------------------"
-            curl https::/$URL/live -s -k | jq -r .status | gre -i live
-            #echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.app-ingress-url }}
+            curl "${URL}/live" -s -k | jq -r .status | grep -i live
+            # echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.application-url }}"
             
