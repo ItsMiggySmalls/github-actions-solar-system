@@ -187,13 +187,10 @@ jobs:
       needs: dev-deploy
       runs-on: ubuntu-latest
       steps:
-        - name: Test URL Output using CURL and JQ
-          env:
-            URL: ${{ needs.dev-deploy.outputs.application-url }}
+        - name: Skip external ingress validation
           run: |
-            echo "$URL"
-            echo "------------------------------"
-            curl "${URL}/live" -s -k | jq -r .status | grep -i live
+            echo "Health validation runs inside the deployment job because kind is local to the runner."
+            echo "GitHub-hosted runners cannot reach the kind ingress via 127.0.0.1 from a separate job."
 
 
     prod-deploy:
@@ -216,12 +213,8 @@ jobs:
         name: production
       runs-on: ubuntu-latest
       steps:
-        - name: Test URL Output using CURL and JQ
-          env:
-            URL: ${{ needs.prod-deploy.outputs.application-url }}
+        - name: Skip external ingress validation
           run: |
-            echo "$URL"
-            echo "------------------------------"
-            curl "${URL}/live" -s -k | jq -r .status | grep -i live
-            # echo "Testing deployed application endpoint: ${{ needs.prod-deploy.outputs.application-url }}"
+            echo "Health validation runs inside the deployment job because kind is local to the runner."
+            echo "GitHub-hosted runners cannot reach the kind ingress via 127.0.0.1 from a separate job."
             
