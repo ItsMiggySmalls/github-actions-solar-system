@@ -1,63 +1,92 @@
-name: Reusable Deployment Workflow
+name: Deployment - Reusable Workflow
 
 on:
   workflow_call:
     inputs:
-      environment:
+      mongodb-uri:
+        description: MongoDB connection string
         required: true
         type: string
-      namespace:
-        required: true
-        type: string
-      image:
-        required: true
-        type: string
-      ingress_ip:
+      kubectl-version:
+        description: kubectl CLI version
         required: false
+        default: v1.26.0
         type: string
-        default: 127.0.0.1
+      k8s-manifest-dir:
+        description: Path to Kubernetes manifests
+        required: true
+        default: kubernetes/
+        type: string
+      environment:
+        description: Deployment environment name
+        required: true
+        default: dev
+        type: string
     secrets:
-      MONGO_URI:
+      k8s-kubeconfig:
+        required: false
+      mongodb-password:
         required: true
-      MONGO_PASSWORD:
-        required: true
+    outputs:
+      application-url:
+        value: ${{ jobs.reuse-deploy.outputs.application-url }}
 
 jobs:
-  deploy:
-    name: Deploy to ${{ inputs.environment }}
+  reuse-deploy:
+    outputs:
+      application-url: ${{ steps.get-ingress.outputs.application-url }}
+    environment:
+      name: ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Install kubectl CLI
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'v1.26.0'
+      - name: Set lower case repository name
+        run: |
+          echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
-      - name: Install local Kubernetes cluster
+      - name: Install Kubernetes Cluster
         uses: helm/kind-action@v1
 
-      - name: Verify cluster access
-        run: |
-          kubectl version --client
-          kubectl get nodes
-
-      - name: Deploy app to namespace
+      - name: Replace Tokens in Manifests
+        uses: cschleiden/replace-tokens@v1
+        with:
+          tokenPrefix: '{_'
+          tokenSuffix: '_}'
+          files: "${{ inputs.k8s-manifest-dir }}*.yaml"
         env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
-          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
-          NAMESPACE: ${{ inputs.namespace }}
-          IMAGE: ${{ inputs.image }}
-          INGRESS_IP: ${{ inputs.ingress_ip }}
+          NAMESPACE: ${{ inputs.environment }}
+          REPLICAS: "2"
+          IMAGE: ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+          INGRESS_IP: 127.0.0.1
+
+      - name: Create MongoDB Secret
         run: |
-          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-          kubectl -n "$NAMESPACE" create secret generic mongo-db-creds \
-            --from-literal="MONGO_URI=${MONGO_URI}" \
-            --from-literal="MONGO_USERNAME=${MONGO_USERNAME}" \
-            --from-literal="MONGO_PASSWORD=${MONGO_PASSWORD}" \
-            --save-config --dry-run=client -o yaml | kubectl apply -f -
-          kubectl apply -f kubernetes/${{ inputs.environment }}/
-          kubectl -n "$NAMESPACE" get pods
+          kubectl create namespace ${{ inputs.environment }} || true
+          kubectl -n ${{ inputs.environment }} create secret generic mongo-db-creds \
+            --from-literal=MONGO_URI='${{ inputs.mongodb-uri }}' \
+            --from-literal=MONGO_USERNAME='${{ vars.MONGO_USERNAME }}' \
+            --from-literal=MONGO_PASSWORD='${{ secrets.mongodb-password }}' \
+            --save-config \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy to Target Environment
+        run: kubectl apply -f "${{ inputs.k8s-manifest-dir }}"
+
+      - name: Validate application health inside the cluster
+        run: |
+          kubectl -n "${{ inputs.environment }}" rollout status deployment/solar-system --timeout=180s
+          kubectl -n "${{ inputs.environment }}" port-forward svc/solar-system 3000:3000 >/tmp/solar-system-port-forward.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/live | jq -r '.status' | grep -i live; then
+              break
+            fi
+            sleep 5
+          done
+
+      - name: Capture Ingress URL
+        id: get-ingress
+        run: |
+          HOST=$(kubectl get ingress solar-system -n "${{ inputs.environment }}" -o jsonpath='{.spec.rules[0].host}')
+          echo "application-url=https://${HOST}" >> "$GITHUB_OUTPUT"

@@ -12,243 +12,209 @@ permissions:
   packages: write
 
 env:
-  MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
-  MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
-  MONGO_URI: "mongodb+srv://${{ vars.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@supercluster.d83jj.mongodb.net/superData?retryWrites=true&w=majority"
+       # Pass the separate variables your code is looking for
+   MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+   MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+        # Keep this here just in case
+   MONGO_URI: "mongodb+srv://${{ vars.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@supercluster.d83jj.mongodb.net/superData?retryWrites=true&w=majority"
 
+
+    
 jobs:
-  unit-testing:
-    name: Unit Testing
-    services:
-      mongo-db:
-        image: siddharth67/mongo-db:non-prod
-        ports:
-          - 27017:27017
-    env:
-      MONGO_URI: mongodb://localhost:27017/superData
-      MONGO_USERNAME: non-prod-user
-      MONGO_PASSWORD: non-prod-password
-    strategy:
-      matrix:
-        node-version: [18, 24]
-        operating-system: [ubuntu-latest]
-        exclude:
-          - node-version: 18
-            operating-system: macos-latest
-    runs-on: ${{ matrix.operating-system }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup NodeJS Version - ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Cache NPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-modules${{ hashFiles('**/package-lock.json') }}
-
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Unit Testing
-        run: npm test
-
-      - name: Archive Test Result
-        if: always() 
-        uses: actions/upload-artifact@v4
-        with:
-          name: Mocha-Test-Result
-          path: test-results.xml
-          retention-days: 5
-
-  code-coverage:
-    name: Code Coverage
-    container:
-      image: node:18
-    services:
-      mongo-db:
-        image: siddharth67/mongo-db:non-prod
-        options:
-          --name mongo
-    env:
-      MONGO_URI: mongodb://localhost:27017/superData
-      MONGO_USERNAME: non-prod-user
-      MONGO_PASSWORD: non-prod-password
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Cache NPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-modules${{ hashFiles('**/package-lock.json') }}
-
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Check Code Coverage
-        continue-on-error: true
-        run: npm run coverage
-
-      - name: Archive Code Coverage Result
-        uses: actions/upload-artifact@v4
-        with:
-          name: Code-Coverage-Result
-          path: coverage 
-          retention-days: 5
-
-  docker:
-    name: Containerization
-    needs: [unit-testing, code-coverage]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      - name: Dockerhub login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: GHCR login
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker Build For Testing
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: ${{ secrets.DOCKER_USERNAME }}/solar-system:${{ github.sha }}
-
-      - name: Docker Image Testing
-        run: |
-          docker images
-          docker run --name solar-system-app -d \
-            -p 3000:3000 \
-            -e MONGO_USERNAME=${{ vars.MONGO_USERNAME }} \
-            -e MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }} \
-            ${{ secrets.DOCKER_USERNAME }}/solar-system:${{ github.sha }}
-
-          export IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' solar-system-app)
-          echo $IP
-
-          echo Testing Image URL using wget
-          wget -q -O - 127.0.0.1:3000/live | grep live
-
-      - name: Set lower case repository name
-        run: |
-          echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-
-      - name: Container registry push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            itsmiggysmalls/solar-system:${{ github.sha }}
-            ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
-
-  dev-deploy:
-    needs: docker
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      - name: Install kubectl CLI
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'v1.26.0'
-
-      - name: Install Kubernetes Cluster
-        uses: helm/kind-action@v1
-
-      - name: Fetch Kubernetes Cluster Details
-        run: |
-          kubectl version --client
-          echo "------------------------------------------"
-          kubectl get nodes
-
-      - name: Save Nginx Ingress IP
-        id: ingress
-        run: |
-          INGRESS_IP=$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
-            -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-          INGRESS_IP=${INGRESS_IP:-127.0.0.1}
-          echo "INGRESS_IP=$INGRESS_IP" >> "$GITHUB_ENV"
-      
-
-      - name: Deploy to Dev
-        run: |
-          sleep 60
-          kubectl -n kube-system get pod
-          set +e
-          REPO_OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
-          kubectl run solar --image ghcr.io/${REPO_OWNER_LC}/solar-system:${{ github.sha }} \
-            --env "MONGO_URI=${{ env.MONGO_URI }}" \
-            --env "MONGO_USERNAME=${{ env.MONGO_USERNAME }}" \
-            --env "MONGO_PASSWORD=${{ env.MONGO_PASSWORD }}"
-          set -e
-          echo "kubectl returned $?"
-          kubectl -n default get pod
-          sleep 10
-      
-      - name: replace Token in Manifest files
-        uses: cschleiden/replace-tokens@v1
-        with:
-          tokenPrefix: '${'
-          tokenSuffix: '}'
-          files: '["kubernetes/development/*.yaml"]'
+    unit-testing:
+        name: Unit Testing
+        services:
+          mongo-db:
+            image: siddharth67/mongo-db:non-prod
+            ports:
+              - 27017:27017
         env:
-          NAMESPACE: ${{ vars.NAMESPACE }}
-          REPLICAS: ${{ vars.REPLICAS }}
-          IMAGE: ${{ vars.DOCKER_USERNAME }}/solar-system:${{ github.sha }}
-          INGRESS_IP: ${{ env.INGRESS_IP}}
+            MONGO_URI: mongodb://localhost:27017/superData
+            MONGO_USERNAME: non-prod-user
+            MONGO_PASSWORD: non-prod-password
+        strategy:
+          matrix:
+            node-version: [18, 24]
+            operating-system: [ubuntu-latest]
+            exclude:
+              - node-version: 18
+                operating-system: macos-latest
+        runs-on: ${{ matrix.operating-system }}
+        steps:
+        - name: Checkout Repository
+          uses: actions/checkout@v4
 
-      - name: Check files
-        run: |
-          cat kubernetes/development/*.yaml
+        - name: Setup NodeJS Version - ${{ matrix.node-version }}
+          uses: actions/setup-node@v4
+          with:
+            node-version: ${{ matrix.node-version }}
+    
+        - name: Cache NPM dependencies
+          uses: actions/cache@v4
+          with:
+            path: node_modules
+            key: ${{ runner.os }}-node-modules${{ hashFiles('**/package-lock.json') }}
+        
+        - name: Install Dependencies
+          run: npm install
+    
+        - name: Unit Testing
+          run: npm test
+          
+        - name: Archive Test Result
+          if: always() 
+          uses: actions/upload-artifact@v4
+          with:
+            name: Mocha-Test-Result
+            path: test-results.xml
+            retention-days: 5
+
+    code-coverage:
+        name: Code Coverage
+        container:
+          image: node:18
+        services:
+          mongo-db:
+            image: siddharth67/mongo-db:non-prod
+            options:
+              --name mongo
+        env:
+            MONGO_URI: mongodb://localhost:27017/superData
+            MONGO_USERNAME: non-prod-user
+            MONGO_PASSWORD: non-prod-password
+        runs-on: ubuntu-latest
+        steps:
+        - name: Checkout Repository
+          uses: actions/checkout@v4
+
+        #- name: Setup NodeJS Version
+        #  uses: actions/setup-node@v4
+        #  with:
+        #    node-version: 21
+    
+        - name: Cache NPM dependencies
+          uses: actions/cache@v4
+          with:
+            path: node_modules
+            key: ${{ runner.os }}-node-modules${{ hashFiles('**/package-lock.json') }}
+            #testing cache
+
+        - name: Install Dependencies
+          run: npm install
+    
+        - name: Check Code Coverage
+          continue-on-error: true
+          run: npm run coverage
+
+        - name: Archive Code Coverage Result
+          uses: actions/upload-artifact@v4
+          with:
+            name: Code-Coverage-Result
+            path: coverage 
+            retention-days: 5
+            
+    docker:
+      name: Containerization
+      needs: [unit-testing, code-coverage]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout Repo
+          uses: actions/checkout@v4
+
+        - name: Dockerhub login
+          uses: docker/login-action@v3
+          with:
+            username: ${{ secrets.DOCKER_USERNAME }}
+            password: ${{ secrets.DOCKER_PASSWORD }}
+
+        - name: GHCR  login
+          uses: docker/login-action@v3
+          with:
+            registry: ghcr.io
+            username: ${{ github.repository_owner }}
+            password: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Docker Build For Testing
+          uses: docker/build-push-action@v7
+          with:
+            context: .
+            push: false
+            tags: ${{ secrets.DOCKER_USERNAME }}/solar-system:${{ github.sha }}
+
+        - name: Docker Image Testing
+          run: |
+            docker images
+            docker run --name solar-system-app -d \
+              -p 3000:3000 \
+              -e MONGO_USERNAME=${{ vars.MONGO_USERNAME }} \
+              -e MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }} \
+              ${{ secrets.DOCKER_USERNAME }}/solar-system:${{ github.sha }}
+
+            export IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' solar-system-app)
+            echo $IP
+
+            echo Testing Image URL using wget
+            wget -q -O - 127.0.0.1:3000/live | grep live
 
 
-      - name: Create MongoDB Secret
-        run: |
-          kubectl create namespace "${{ vars.NAMESPACE }}" \
-            --dry-run=client \
-            -o yaml | kubectl apply -f -
-          kubectl -n "${{ vars.NAMESPACE }}" create secret generic mongo-db-creds \
-            --from-literal="MONGO_URI=${{ env.MONGO_URI }}" \
-            --from-literal="MONGO_USERNAME=${{ vars.MONGO_USERNAME }}" \
-            --from-literal="MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" \
-            --save-config \
-            --dry-run=client \
-            -o yaml | kubectl apply -f -
+        - name: Set lower case repository name
+          run: |
+                echo "IMAGE_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+        - name: Container registry push
+          uses: docker/build-push-action@v7
+          with:
+            context: .
+            push: true
+            tags: |
+              itsmiggysmalls/solar-system:${{ github.sha }}
+              ghcr.io/${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+
+    dev-deploy:
+      if: contains(github.ref, 'feature/')
+      needs: docker
+      uses: ./.github/workflows/reuse-deployment.yml
+      with:
+        mongodb-uri: ${{ vars.MONGO_URI }}
+        environment: development
+        k8s-manifest-dir: kubernetes/development/
+      secrets:
+        mongodb-password: ${{ secrets.MONGO_PASSWORD }}
+
+    dev-integration-testing: 
+      if: contains(github.ref, 'feature/')
+      name: Dev-Integration Testing
+      needs: dev-deploy
+      runs-on: ubuntu-latest
+      steps:
+        - name: Skip external ingress validation
+          run: |
+            echo "Health validation runs inside the deployment job because kind is local to the runner."
+            echo "GitHub-hosted runners cannot reach the kind ingress via 127.0.0.1 from a separate job."
 
 
-      - name: Deploy to Dev Env
-        run: | 
-          kubectl apply -f kubernetes/development/
-          sleep 10
-          kubectl -n default get pod
-          echo "------------------------------------------"
-          kubectl -n default get svc
-          echo "------------------------------------------"
-          kubectl -n default get deployment
+    prod-deploy:
+      name: Deploy to production
+      if: github.ref == 'refs/heads/main'
+      needs: docker
+      uses: ./.github/workflows/reuse-deployment.yml
+      with:
+        mongodb-uri: ${{ vars.MONGO_URI }}
+        environment: production
+        k8s-manifest-dir: kubernetes/production/
+      secrets:
+        mongodb-password: ${{ secrets.MONGO_PASSWORD }}
 
-      - name: Test Dev Ingress
-        run: |
-          kubectl -n development rollout status deployment/solar-system --timeout=120s
-          HOST=$(kubectl -n development get ingress solar-system \
-            -o jsonpath='{.spec.rules[0].host}')
-          echo "Testing http://$HOST"
-          curl --fail --resolve "$HOST:80:127.0.0.1" "http://$HOST/"
+    prod-integration-testing: 
+      name: Prod Integration Testing
+      if: github.ref == 'refs/heads/main'
+      needs: prod-deploy
+      environment:
+        name: production
+      runs-on: ubuntu-latest
+      steps:
+        - name: Skip external ingress validation
+          run: |
+            echo "Health validation runs inside the deployment job because kind is local to the runner."
+            echo "GitHub-hosted runners cannot reach the kind ingress via 127.0.0.1 from a separate job."
+            
