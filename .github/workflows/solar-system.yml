@@ -112,6 +112,34 @@ jobs:
             name: Code-Coverage-Result
             path: coverage 
             retention-days: 5
+
+
+      reports-s3:
+    name: AWS S3 - Upload Reports
+    runs-on: ubuntu-latest
+    needs: [code-coverage, unit-testing]
+    continue-on-error: true
+
+    steps:
+      - name: Download Mocha Test Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: Mocha-Test-Result
+
+      - name: Download Code Coverage Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: Code-Coverage-Result
+
+      - name: Merge Test Files
+        run: |
+          mkdir reports-${{ github.sha }}
+          mv cobertura-coverage.xml reports-${{ github.sha }}/
+          mv test-results.xml reports-${{ github.sha }}/
+          ls -ltr reports-${{ github.sha }}/
+
+      - name: Upload to S3 (placeholder)
+        run: echo "Uploading reports directory to S3"
             
     docker:
       name: Containerization
